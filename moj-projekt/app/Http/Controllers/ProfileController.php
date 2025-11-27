@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\View\View;
+use App\Models\Project;
 
 class ProfileController extends Controller
 {
@@ -24,18 +25,22 @@ class ProfileController extends Controller
     /**
      * Update the user's profile information.
      */
-    public function update(ProfileUpdateRequest $request): RedirectResponse
-    {
-        $request->user()->fill($request->validated());
+    public function update(Request $request, Project $project)
+{
+    $user = $request->user();
 
-        if ($request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
-        }
-
-        $request->user()->save();
-
-        return Redirect::route('profile.edit')->with('status', 'profile-updated');
+    if ($project->owner_id == $user->id) {
+        // Voditelj može mijenjati sve
+        $project->update($request->all());
+    } elseif ($project->members->contains($user)) {
+        // Član tima može mijenjati samo obavljene poslove
+        $project->update($request->only('completed_tasks'));
+    } else {
+        abort(403, 'Nemaš ovlasti za ovaj projekt.');
     }
+
+    return redirect()->route('projects.show', $project);
+}
 
     /**
      * Delete the user's account.
@@ -57,4 +62,19 @@ class ProfileController extends Controller
 
         return Redirect::to('/');
     }
+   
+
+public function show()
+{
+    $user = Auth::user();
+
+    // Projekti koje je korisnik otvorio (voditelj)
+    $owned = $user->ownedProjects;
+
+    // Projekti gdje je korisnik član tima
+    $member = $user->teamProjects;
+
+    return view('profile.show', compact('user', 'owned', 'member'));
+}
+
 }
